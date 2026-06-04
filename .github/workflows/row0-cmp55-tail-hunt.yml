@@ -19,6 +19,9 @@ on:
         description: Worker threads per shard
         required: true
         default: "2"
+  push:
+    branches:
+      - codex/row0-cmp55-tail-search
 
 jobs:
   build:
@@ -76,6 +79,10 @@ jobs:
       DIALOG_GCD_COMPARE_BITS: "55"
       DIALOG_GCD_APPLY_CLEAN_COMPARE_BITS: "19"
       TAIL_HUNT_APPLY_CHECK: "1"
+      PUSH_START: "0"
+      PUSH_PER_SHARD: "3000"
+      PUSH_SHARDS: "24"
+      PUSH_THREADS: "2"
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -84,10 +91,10 @@ jobs:
         shell: bash
         run: |
           chmod +x ./tail_hunt
-          start="${{ github.event.inputs.start }}"
-          per_shard="${{ github.event.inputs.per_shard }}"
-          shards="${{ github.event.inputs.shards }}"
-          threads="${{ github.event.inputs.threads }}"
+          start="${{ github.event.inputs.start || env.PUSH_START }}"
+          per_shard="${{ github.event.inputs.per_shard || env.PUSH_PER_SHARD }}"
+          shards="${{ github.event.inputs.shards || env.PUSH_SHARDS }}"
+          threads="${{ github.event.inputs.threads || env.PUSH_THREADS }}"
           if (( ${{ matrix.shard }} >= shards )); then
             echo "matrix shard ${{ matrix.shard }} outside requested shard count $shards"
             exit 0
