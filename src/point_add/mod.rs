@@ -24316,6 +24316,13 @@ fn dialog_gcd_odd_u_lowbit_fastpath_enabled() -> bool {
         == Some("1")
 }
 
+fn dialog_gcd_branch_high_slice_compare_enabled() -> bool {
+    std::env::var("DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
 fn dialog_gcd_cmp_gt_truncated_into_width(
     b: &mut B,
     u: &[QubitId],
@@ -24356,9 +24363,14 @@ fn dialog_gcd_branch_bits_host_comparator_enabled() -> bool {
 /// `carries` transient on a borrowed clean slice (the idle future-log region)
 /// when one of sufficient length is supplied, freeing the peak qubit the fresh
 /// allocation would otherwise consume at the branch_bits instant. Falls back to
-/// the self-allocating comparator when no slice (or a too-short one) is given, so
-/// behaviour is identical to `dialog_gcd_ccx_cmp_gt_truncated_into_width` in that
-/// case. Value-exact either way.
+/// the self-allocating comparator when no slice (or a too-short one) is given.
+///
+/// With `DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE=1`, this helper also applies a
+/// branch-specific shortcut: in the fused branch-bit call sites `ctrl` is the
+/// copied low bit `b0 = v[0]`, so `b0 & (u > v)` can ignore lane 0 when the
+/// compare covers the whole active word. Keep that precondition local to the
+/// branch-bit call sites; the high-slice path is not a generic controlled
+/// comparator replacement.
 fn dialog_gcd_ccx_cmp_gt_truncated_into_width_hosted(
     b: &mut B,
     u: &[QubitId],
@@ -24372,8 +24384,18 @@ fn dialog_gcd_ccx_cmp_gt_truncated_into_width_hosted(
     assert!(!u.is_empty());
     let compare_bits = compare_bits.min(u.len()).max(1);
     let start = u.len() - compare_bits;
-    let cmp_u = &v[start..];
-    let cmp_v = &u[start..];
+    // In the fused branch lifecycle this comparator is controlled by b0=v[0].
+    // When b0=0 the target is not toggled; when b0=1, lane 0 is equal on the
+    // odd-u route, so only the high slices decide `u > v`.
+    let high_slice_branch_compare = dialog_gcd_branch_high_slice_compare_enabled()
+        && dialog_gcd_odd_u_lowbit_fastpath_enabled()
+        && start == 0
+        && compare_bits > 1;
+    let (cmp_u, cmp_v) = if high_slice_branch_compare {
+        (&v[1..], &u[1..])
+    } else {
+        (&v[start..], &u[start..])
+    };
     let n = cmp_u.len();
     // Need c_in (1) + carries (n) = n+1 clean lanes. PARTIAL hosting: borrow the
     // future-log prefix that fits and allocate only the deficit, instead of
@@ -31203,6 +31225,11 @@ fn configure_ecdsafail_submission_route() {
     // This reached peak 1500 -> 1466 for +13,566 avg-executed Toffoli (1,718,717 ->
     // 1,732,283); score 1466 x 1,732,283 = 2,539,526,878.
     set_default_env("DIALOG_GCD_BRANCH_BITS_HOST_COMPARATOR", "1");
+    // Search-branch candidate: in the fused branch-bit comparator, ctrl is
+    // b0=v[0]. On the odd-u route, ctrl=1 implies u[0]=v[0]=1, so the
+    // full-width branch compare can omit lane 0. This is exact, but it changes
+    // the op stream and needs its own clean tail nonce before submission.
+    set_default_env("DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE", "1");
     // PEAK 1466 -> 1446 (-20q). The 1466 floor was a 4-phase co-bind: the two apply
     // mod add/sub (materialized_special_chunked_raw_sum/_difference) and the two GCD-body
     // add/sub (raw_tobitvector_materialized_{add,sub}_body). Both body families dropped
