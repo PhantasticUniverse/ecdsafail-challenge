@@ -1,6 +1,7 @@
 use alloy_primitives::U256;
-use quantum_ecc::circuit::{Op, OperationType};
+use quantum_ecc::circuit::{analyze_ops, Op, OperationType, QubitOrBit};
 use quantum_ecc::point_add::{self, SECP256K1_P};
+use quantum_ecc::sim::Simulator;
 use quantum_ecc::weierstrass_elliptic_curve::{sub_mod, WeierstrassEllipticCurve};
 use sha3::{
     digest::{ExtendableOutput, Update, XofReader},
@@ -532,6 +533,114 @@ fn nonce_fail_count(
     (failures, first)
 }
 
+#[derive(Debug)]
+struct ExactReport {
+    ok: bool,
+    classical_failures: usize,
+    phase_garbage_batches: usize,
+    ancilla_garbage_batches: usize,
+}
+
+fn nonce_exact_report(
+    prefix: &Shake256,
+    ops: &[Op],
+    table: &[[(U256, U256); 256]; 32],
+    nonce: u64,
+) -> ExactReport {
+    let mut xof = xof_for_nonce(prefix, ops, nonce);
+    let mut targets = Vec::with_capacity(NUM_TESTS);
+    let mut offsets = Vec::with_capacity(NUM_TESTS);
+    let mut expected = Vec::with_capacity(NUM_TESTS);
+
+    for _ in 0..NUM_TESTS {
+        let mut rb = [[0u8; 32]; 2];
+        xof.read(&mut rb[0]);
+        xof.read(&mut rb[1]);
+        let k1 = U256::from_le_bytes(rb[0]);
+        let k2 = U256::from_le_bytes(rb[1]);
+        let t = scalar_mul_precomputed(table, k1);
+        let o = scalar_mul_precomputed(table, k2);
+        if t.infinity || o.infinity {
+            continue;
+        }
+        let e = jac_add(t, o);
+        let Some(((tx, ty), (ox, oy), (ex, ey))) = affine_batch3(t, o, e) else {
+            continue;
+        };
+        if tx == ox {
+            continue;
+        }
+        targets.push((tx, ty));
+        offsets.push((ox, oy));
+        expected.push((ex, ey));
+    }
+
+    let (total_qubits, num_bits, _num_registers, layout_regs) = analyze_ops(ops.iter());
+    assert!(layout_regs.len() >= 4);
+    let mut sim = Simulator::new(total_qubits as usize, num_bits as usize, &mut xof);
+    let mut report = ExactReport {
+        ok: true,
+        classical_failures: 0,
+        phase_garbage_batches: 0,
+        ancilla_garbage_batches: 0,
+    };
+
+    const BATCH: usize = 64;
+    let num_batches = (targets.len() + BATCH - 1) / BATCH;
+    for batch in 0..num_batches {
+        let bs = BATCH.min(targets.len() - batch * BATCH);
+        let cond_mask: u64 = if bs == 64 { u64::MAX } else { (1u64 << bs) - 1 };
+
+        sim.clear_for_shot();
+        for shot in 0..bs {
+            let i = batch * BATCH + shot;
+            sim.set_register(&layout_regs[0], targets[i].0, shot);
+            sim.set_register(&layout_regs[1], targets[i].1, shot);
+            sim.set_register(&layout_regs[2], offsets[i].0, shot);
+            sim.set_register(&layout_regs[3], offsets[i].1, shot);
+        }
+
+        sim.apply_iter(ops.iter());
+
+        for shot in 0..bs {
+            let i = batch * BATCH + shot;
+            let gx = sim.get_register(&layout_regs[0], shot);
+            let gy = sim.get_register(&layout_regs[1], shot);
+            if gx != expected[i].0 || gy != expected[i].1 {
+                report.classical_failures += 1;
+                report.ok = false;
+            }
+        }
+
+        let phase = sim.phase & cond_mask;
+        if phase != 0 {
+            report.phase_garbage_batches += 1;
+            report.ok = false;
+        }
+
+        for register in &layout_regs {
+            for qb in register {
+                if let QubitOrBit::Qubit(q) = *qb {
+                    *sim.qubit_mut(q) = 0;
+                }
+            }
+        }
+        let mut garbage_q = false;
+        for q in 0..total_qubits {
+            if sim.qubit(quantum_ecc::circuit::QubitId(q)) & cond_mask != 0 {
+                garbage_q = true;
+                break;
+            }
+        }
+        if garbage_q {
+            report.ancilla_garbage_batches += 1;
+            report.ok = false;
+        }
+    }
+
+    report
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let start = args.get(1).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
@@ -582,8 +691,18 @@ fn main() {
             let mut i = tid as u64;
             while i < count && !found.load(Ordering::Relaxed) {
                 let nonce = start + i * step;
-                let (failures, first) =
+                let (mut failures, mut first) =
                     nonce_fail_count(&prefix, ops.as_slice(), table.as_ref(), nonce, !full_count);
+                if failures == 0 {
+                    let exact = nonce_exact_report(&prefix, ops.as_slice(), table.as_ref(), nonce);
+                    if !exact.ok {
+                        eprintln!("fast-clean nonce={nonce} rejected by exact check: {exact:?}");
+                        failures = exact.classical_failures
+                            + exact.phase_garbage_batches
+                            + exact.ancilla_garbage_batches;
+                        first = Some(0);
+                    }
+                }
                 let first_score = first.unwrap_or(NUM_TESTS);
                 if failures < local_best || (failures == local_best && first_score > local_first) {
                     local_best = failures;
