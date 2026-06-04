@@ -19,6 +19,14 @@ on:
         description: Worker threads per shard
         required: true
         default: "2"
+      dialog_reroll:
+        description: DIALOG_REROLL identity-pair prefix reseed
+        required: true
+        default: "4269"
+      dialog_post_sub_reroll:
+        description: DIALOG_POST_SUB_REROLL identity-pair midstream reseed
+        required: true
+        default: "503292"
   push:
     branches:
       - codex/row0-tail-search
@@ -79,6 +87,8 @@ jobs:
       PUSH_PER_SHARD: "3000"
       PUSH_SHARDS: "24"
       PUSH_THREADS: "2"
+      PUSH_DIALOG_REROLL: "4269"
+      PUSH_DIALOG_POST_SUB_REROLL: "503292"
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -91,10 +101,15 @@ jobs:
           per_shard="${{ github.event.inputs.per_shard || env.PUSH_PER_SHARD }}"
           shards="${{ github.event.inputs.shards || env.PUSH_SHARDS }}"
           threads="${{ github.event.inputs.threads || env.PUSH_THREADS }}"
+          dialog_reroll="${{ github.event.inputs.dialog_reroll || env.PUSH_DIALOG_REROLL }}"
+          dialog_post_sub_reroll="${{ github.event.inputs.dialog_post_sub_reroll || env.PUSH_DIALOG_POST_SUB_REROLL }}"
+          export DIALOG_REROLL="$dialog_reroll"
+          export DIALOG_POST_SUB_REROLL="$dialog_post_sub_reroll"
           if (( ${{ matrix.shard }} >= shards )); then
             echo "matrix shard ${{ matrix.shard }} outside requested shard count $shards"
             exit 0
           fi
+          echo "DIALOG_REROLL=$DIALOG_REROLL DIALOG_POST_SUB_REROLL=$DIALOG_POST_SUB_REROLL"
           shard_start=$((start + ${{ matrix.shard }}))
           ./tail_hunt "$shard_start" "$per_shard" "$shards" "$threads" | tee "hunt-${{ matrix.shard }}.log"
           if grep -q '^FOUND ' "hunt-${{ matrix.shard }}.log"; then
