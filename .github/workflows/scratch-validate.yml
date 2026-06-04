@@ -31,7 +31,10 @@ jobs:
       - name: Setup benchmark
         run: ./setup.sh
       - name: Run benchmark
-        run: ./benchmark.sh --note "$BENCH_NOTE"
+        run: |
+          rm -f ops.bin score.json
+          ./target/release/build_circuit
+          ./target/release/eval_circuit --note "$BENCH_NOTE"
       - name: Show score
         if: always()
         run: |
