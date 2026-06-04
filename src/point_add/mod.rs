@@ -6003,6 +6003,22 @@ fn mod_mul_sub_into_acc_schoolbook_phase_clean(
 ///
 /// Row i layout (width n-i): bit 0 = diagonal x[i] at position 2i, bit 1 = 0
 /// (gap), bit k+2 = cross-product (x[i] AND x[i+1+k]) at position i+(i+1+k)+1.
+fn square_row0_direct_enabled() -> bool {
+    std::env::var("SQUARE_ROW0_DIRECT").ok().as_deref() == Some("1")
+}
+
+fn schoolbook_square_row0_direct(b: &mut B, x: &[QubitId], tmp_ext: &[QubitId]) {
+    let n = x.len();
+    if n == 0 {
+        return;
+    }
+    debug_assert!(tmp_ext.len() >= n + 1);
+    b.cx(x[0], tmp_ext[0]);
+    for k in 0..n - 1 {
+        b.ccx(x[0], x[1 + k], tmp_ext[k + 2]);
+    }
+}
+
 fn schoolbook_square_symmetric(b: &mut B, x: &[QubitId], tmp_ext: &[QubitId]) {
     let n = x.len();
     debug_assert_eq!(tmp_ext.len(), 2 * n);
@@ -6013,6 +6029,10 @@ fn schoolbook_square_symmetric(b: &mut B, x: &[QubitId], tmp_ext: &[QubitId]) {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
         // num_cross = number of cross-products in this row = width - 2 when width >= 2.
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6041,6 +6061,10 @@ fn schoolbook_square_symmetric_inverse(b: &mut B, x: &[QubitId], tmp_ext: &[Qubi
     for i in (0..n).rev() {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6070,6 +6094,10 @@ fn schoolbook_square_symmetric_nohmr(b: &mut B, x: &[QubitId], tmp_ext: &[QubitI
     for i in 0..n {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6096,6 +6124,10 @@ fn schoolbook_square_symmetric_nohmr_inverse(b: &mut B, x: &[QubitId], tmp_ext: 
     for i in (0..n).rev() {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6123,6 +6155,10 @@ fn schoolbook_square_symmetric_lowq(b: &mut B, x: &[QubitId], tmp_ext: &[QubitId
     for i in 0..n {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6151,6 +6187,10 @@ fn schoolbook_square_symmetric_lowq_inverse(b: &mut B, x: &[QubitId], tmp_ext: &
     for i in (0..n).rev() {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6188,6 +6228,10 @@ fn schoolbook_square_symmetric_hosted(b: &mut B, x: &[QubitId], tmp_ext: &[Qubit
     for i in 0..n {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6243,6 +6287,10 @@ fn schoolbook_square_symmetric_hosted_inverse(
     for i in (0..n).rev() {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6349,6 +6397,10 @@ fn schoolbook_square_symmetric_lowq_selfhosted_with_clean_supplement(
     for i in 0..n {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -6426,6 +6478,10 @@ fn schoolbook_square_symmetric_lowq_selfhosted_inverse_with_clean_supplement(
     for i in (0..n).rev() {
         let width = if i == n - 1 { 1 } else { n - i + 1 };
         let num_cross = if i + 1 < n { n - i - 1 } else { 0 };
+        if i == 0 && square_row0_direct_enabled() {
+            schoolbook_square_row0_direct(b, x, tmp_ext);
+            continue;
+        }
         let row = b.alloc_qubits(width);
         b.cx(x[i], row[0]);
         for k in 0..num_cross {
@@ -31185,6 +31241,12 @@ fn configure_ecdsafail_submission_route() {
     set_default_env("KARA_Z02_LOWQ", "1");
     set_default_env("KARA_Z2_SELFHOST", "1");
     set_default_env("KARA_SOL_MOD_VENT", "1");
+    // Search-branch exact row-0 square cut: when a schoolbook square writes
+    // row 0 into a freshly-zero accumulator slice, no carry can be generated.
+    // Compute/clear that row directly in the destination instead of allocating a
+    // row register and running a Cuccaro add/sub. This changes the op stream and
+    // therefore needs a fresh clean tail nonce before submission.
+    set_default_env("SQUARE_ROW0_DIRECT", "1");
     // PEAK 1500 -> 1466 (-34q). On the 1500 floor the peak was a co-binder tie between
     // the GCD-core branch comparator (tobitvector_branch_bits / _reverse) and the apply
     // mod add/sub (materialized_special_chunked_raw_sum / _difference). The apply phase
