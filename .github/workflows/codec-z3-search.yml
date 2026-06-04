@@ -22,10 +22,14 @@ jobs:
           python-version: "3.11"
       - name: Install z3
         run: python -m pip install z3-solver
+      - name: Run direct affine-conjugated search
+        run: python scripts/codec_z3_direct.py 3 "${{ github.event.inputs.timeout_ms || '0' }}" | tee codec-z3-direct.log
       - name: Run complete affine-layer search
         run: python scripts/codec_z3_search.py "${{ github.event.inputs.timeout_ms || '0' }}" | tee codec-z3.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: codec-z3-log
-          path: codec-z3.log
+          path: |
+            codec-z3-direct.log
+            codec-z3.log
