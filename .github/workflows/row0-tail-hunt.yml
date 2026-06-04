@@ -19,6 +19,9 @@ on:
         description: Worker threads per shard
         required: true
         default: "2"
+  push:
+    branches:
+      - codex/row0-tail-search
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -72,7 +75,7 @@ jobs:
           - 22
           - 23
     env:
-      PUSH_START: "1200700"
+      PUSH_START: "0"
       PUSH_PER_SHARD: "3000"
       PUSH_SHARDS: "24"
       PUSH_THREADS: "2"
