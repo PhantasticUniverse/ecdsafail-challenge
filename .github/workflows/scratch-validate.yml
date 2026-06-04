@@ -1,0 +1,39 @@
+name: scratch-validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: Benchmark note
+        required: true
+        default: codex gcd scratch lane validation
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: scratch-validate-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}
+      - name: Show toolchain
+        run: rustup show
+      - name: Run benchmark
+        run: cargo run --release --locked -- --note "${{ github.event.inputs.note }}"
+      - name: Show score
+        if: always()
+        run: |
+          test -f score.json && cat score.json || true
+          test -f results.tsv && tail -n 5 results.tsv || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scratch-validation-results
+          path: |
+            score.json
+            results.tsv

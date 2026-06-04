@@ -24485,6 +24485,33 @@ fn dialog_gcd_body_carry_trunc_width(active_width: usize) -> usize {
     active_width.saturating_sub(w).max(2)
 }
 
+fn dialog_gcd_body_lane_plan(active_width: usize) -> (usize, usize, usize, usize) {
+    let body_w = dialog_gcd_body_carry_trunc_width(active_width);
+    let body_start = if dialog_gcd_odd_u_lowbit_fastpath_enabled() {
+        1
+    } else {
+        0
+    };
+    let body_len = body_w.saturating_sub(body_start);
+    let carry_need = body_len.saturating_sub(1);
+    (body_w, body_start, body_len, carry_need)
+}
+
+fn dialog_gcd_hosted_body_scratch_need(active_width: usize) -> usize {
+    let (body_w, _body_start, _body_len, carry_need) =
+        dialog_gcd_body_lane_plan(active_width);
+    let body_need = if dialog_gcd_host_gated_enabled() {
+        carry_need + body_w
+    } else {
+        carry_need
+    };
+    if dialog_gcd_branch_bits_host_comparator_enabled() {
+        body_need.max(active_width + 1)
+    } else {
+        body_need
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DialogGcdHighTailLane {
     U,
@@ -24722,12 +24749,15 @@ fn dialog_gcd_controlled_sub_selected(
     assert!(!subtrahend.is_empty());
     if dialog_gcd_raw_tobitvector_materialized_sub_enabled() {
         let n = subtrahend.len();
+        let (body_w, body_start, _body_len, carry_need) = dialog_gcd_body_lane_plan(n);
         // Host the gated register on the tail of the borrowed clean slice when
-        // it is long enough for both carry (n-1) and gated (n).
+        // it is long enough for the body carries and the gated body lanes.
         let gated_host: Option<&[QubitId]> = if dialog_gcd_host_gated_enabled() {
             borrowed_carries.and_then(|c| {
-                if c.len() >= 2 * n - 1 {
-                    Some(&c[n - 1..2 * n - 1])
+                let gated_start = carry_need;
+                let gated_end = gated_start + body_w;
+                if c.len() >= gated_end {
+                    Some(&c[gated_start..gated_end])
                 } else {
                     None
                 }
@@ -24739,27 +24769,23 @@ fn dialog_gcd_controlled_sub_selected(
         let gated: &[QubitId] = match gated_host {
             Some(h) => h,
             None => {
-                gated_owned = b.alloc_qubits(n);
+                gated_owned = b.alloc_qubits(body_w);
                 gated_owned.as_slice()
             }
         };
-        let body_w = dialog_gcd_body_carry_trunc_width(n);
-        let odd_lowbit_fast = dialog_gcd_odd_u_lowbit_fastpath_enabled();
-        let body_start = if odd_lowbit_fast { 1 } else { 0 };
         b.set_phase("dialog_gcd_raw_tobitvector_materialized_sub_load");
         for i in body_start..body_w {
             b.ccx(ctrl, subtrahend[i], gated[i]);
         }
-        if odd_lowbit_fast {
+        if body_start >= 1 {
             // Reachable GCD states have subtrahend[0]=1 and acc[0]=ctrl here:
             // ctrl - ctrl has result bit 0 and no borrow into bit 1.
             b.cx(ctrl, acc[0]);
         }
         b.set_phase("dialog_gcd_raw_tobitvector_materialized_sub_body");
         if body_start < body_w {
-            let body_len = body_w - body_start;
             if let Some(carries) =
-                borrowed_carries.filter(|carries| carries.len() >= body_len.saturating_sub(1))
+                borrowed_carries.filter(|carries| carries.len() >= carry_need)
             {
                 if dialog_gcd_body_host_cin_enabled() && body_start >= 1 {
                     // gated[0] is unused (load/clear start at body_start) and |0>:
@@ -24769,14 +24795,14 @@ fn dialog_gcd_controlled_sub_selected(
                         &gated[body_start..body_w],
                         &acc[body_start..body_w],
                         gated[0],
-                        &carries[..body_len.saturating_sub(1)],
+                        &carries[..carry_need],
                     );
                 } else {
                     sub_nbit_qq_fast_borrowed_carries(
                         b,
                         &gated[body_start..body_w],
                         &acc[body_start..body_w],
-                        &carries[..body_len.saturating_sub(1)],
+                        &carries[..carry_need],
                     );
                 }
             } else {
@@ -24808,10 +24834,13 @@ fn dialog_gcd_controlled_add_selected(
     assert!(!addend.is_empty());
     if dialog_gcd_raw_tobitvector_materialized_sub_enabled() {
         let n = addend.len();
+        let (body_w, body_start, _body_len, carry_need) = dialog_gcd_body_lane_plan(n);
         let gated_host: Option<&[QubitId]> = if dialog_gcd_host_gated_enabled() {
             borrowed_carries.and_then(|c| {
-                if c.len() >= 2 * n - 1 {
-                    Some(&c[n - 1..2 * n - 1])
+                let gated_start = carry_need;
+                let gated_end = gated_start + body_w;
+                if c.len() >= gated_end {
+                    Some(&c[gated_start..gated_end])
                 } else {
                     None
                 }
@@ -24823,27 +24852,23 @@ fn dialog_gcd_controlled_add_selected(
         let gated: &[QubitId] = match gated_host {
             Some(h) => h,
             None => {
-                gated_owned = b.alloc_qubits(n);
+                gated_owned = b.alloc_qubits(body_w);
                 gated_owned.as_slice()
             }
         };
-        let body_w = dialog_gcd_body_carry_trunc_width(n);
-        let odd_lowbit_fast = dialog_gcd_odd_u_lowbit_fastpath_enabled();
-        let body_start = if odd_lowbit_fast { 1 } else { 0 };
         b.set_phase("dialog_gcd_raw_tobitvector_materialized_add_load");
         for i in body_start..body_w {
             b.ccx(ctrl, addend[i], gated[i]);
         }
-        if odd_lowbit_fast {
+        if body_start >= 1 {
             // In reverse, acc[0] is zero after unshift and addend[0]=1:
             // adding ctrl sets the low result bit with no carry into bit 1.
             b.cx(ctrl, acc[0]);
         }
         b.set_phase("dialog_gcd_raw_tobitvector_materialized_add_body");
         if body_start < body_w {
-            let body_len = body_w - body_start;
             if let Some(carries) =
-                borrowed_carries.filter(|carries| carries.len() >= body_len.saturating_sub(1))
+                borrowed_carries.filter(|carries| carries.len() >= carry_need)
             {
                 if dialog_gcd_body_host_cin_enabled() && body_start >= 1 {
                     // gated[0] is unused (load/clear start at body_start) and |0>:
@@ -24853,14 +24878,14 @@ fn dialog_gcd_controlled_add_selected(
                         &gated[body_start..body_w],
                         &acc[body_start..body_w],
                         gated[0],
-                        &carries[..body_len.saturating_sub(1)],
+                        &carries[..carry_need],
                     );
                 } else {
                     add_nbit_qq_fast_borrowed_carries(
                         b,
                         &gated[body_start..body_w],
                         &acc[body_start..body_w],
-                        &carries[..body_len.saturating_sub(1)],
+                        &carries[..carry_need],
                     );
                 }
             } else {
@@ -26295,7 +26320,7 @@ fn dialog_gcd_build_composite_scratch(
     raw_block: &[QubitId],
     active_width: usize,
 ) -> DialogGcdCompositeScratch {
-    let want = 2 * active_width - 1;
+    let want = dialog_gcd_hosted_body_scratch_need(active_width);
     let mut lanes = Vec::with_capacity(want);
     let mut push = |q: QubitId| {
         if lanes.len() < want
