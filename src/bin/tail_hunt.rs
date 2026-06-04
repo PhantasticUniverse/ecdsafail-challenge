@@ -350,7 +350,7 @@ fn solinas_double_raw(x: U256) -> U256 {
     let c = U256::MAX
         .wrapping_sub(SECP256K1_P)
         .wrapping_add(U256::from(1u64));
-    let y = x << 1;
+    let y: U256 = x << 1;
     if x.bit(255) {
         y.wrapping_add(c)
     } else {
