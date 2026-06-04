@@ -1,6 +1,9 @@
 name: scratch-validate
 
 on:
+  push:
+    branches:
+      - codex/gcd-scratch-1349
   workflow_dispatch:
     inputs:
       note:
