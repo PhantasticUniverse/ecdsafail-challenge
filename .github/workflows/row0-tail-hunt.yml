@@ -35,6 +35,10 @@ on:
         description: Optional DIALOG_GCD_BODY_CARRY_BAND_TRIMS csv
         required: false
         default: ""
+      skip_exact:
+        description: Optional TAIL_HUNT_SKIP_EXACT override
+        required: false
+        default: ""
   push:
     branches:
       - codex/row0-tail-search
@@ -99,6 +103,7 @@ jobs:
       PUSH_BRANCH_HIGH_SLICE: ""
       PUSH_BODY_CARRY_TRUNC_W: ""
       PUSH_BODY_CARRY_BAND_TRIMS: ""
+      PUSH_SKIP_EXACT: ""
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -115,6 +120,7 @@ jobs:
           branch_high_slice="${{ github.event.inputs.branch_high_slice || env.PUSH_BRANCH_HIGH_SLICE }}"
           body_carry_trunc_w="${{ github.event.inputs.body_carry_trunc_w || env.PUSH_BODY_CARRY_TRUNC_W }}"
           body_carry_band_trims="${{ github.event.inputs.body_carry_band_trims || env.PUSH_BODY_CARRY_BAND_TRIMS }}"
+          skip_exact="${{ github.event.inputs.skip_exact || env.PUSH_SKIP_EXACT }}"
           if [[ -n "$band_trims" ]]; then
             export DIALOG_GCD_WIDTH_BAND_TRIMS="$band_trims"
             echo "band_trims=$band_trims"
@@ -130,6 +136,10 @@ jobs:
           if [[ -n "$body_carry_band_trims" ]]; then
             export DIALOG_GCD_BODY_CARRY_BAND_TRIMS="$body_carry_band_trims"
             echo "body_carry_band_trims=$body_carry_band_trims"
+          fi
+          if [[ -n "$skip_exact" ]]; then
+            export TAIL_HUNT_SKIP_EXACT="$skip_exact"
+            echo "skip_exact=$skip_exact"
           fi
           if (( ${{ matrix.shard }} >= shards )); then
             echo "matrix shard ${{ matrix.shard }} outside requested shard count $shards"

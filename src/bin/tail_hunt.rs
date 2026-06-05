@@ -706,6 +706,7 @@ fn main() {
                 .unwrap_or(1)
         });
     let full_count = std::env::var("TAIL_HUNT_FULL_COUNT").ok().as_deref() == Some("1");
+    let skip_exact = std::env::var("TAIL_HUNT_SKIP_EXACT").ok().as_deref() == Some("1");
 
     std::env::set_var("DIALOG_TAIL_NONCE", "0");
     let ops = Arc::new(point_add::build());
@@ -740,7 +741,7 @@ fn main() {
                 let nonce = start + i * step;
                 let (mut failures, mut first) =
                     nonce_fail_count(&prefix, ops.as_slice(), table.as_ref(), nonce, !full_count);
-                if failures == 0 {
+                if failures == 0 && !skip_exact {
                     let exact = nonce_exact_report(&prefix, ops.as_slice(), table.as_ref(), nonce);
                     if !exact.ok {
                         eprintln!("fast-clean nonce={nonce} rejected by exact check: {exact:?}");
