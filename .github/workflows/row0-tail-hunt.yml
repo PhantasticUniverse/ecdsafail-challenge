@@ -1,0 +1,156 @@
+name: row0-tail-hunt
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: First nonce to test
+        required: true
+        default: "0"
+      per_shard:
+        description: Nonces per shard
+        required: true
+        default: "3000"
+      shards:
+        description: Matrix shard count
+        required: true
+        default: "24"
+      threads:
+        description: Worker threads per shard
+        required: true
+        default: "2"
+      band_trims:
+        description: Optional DIALOG_GCD_WIDTH_BAND_TRIMS csv
+        required: false
+        default: ""
+      branch_high_slice:
+        description: Optional DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE override
+        required: false
+        default: ""
+      body_carry_trunc_w:
+        description: Optional DIALOG_GCD_BODY_CARRY_TRUNC_W override
+        required: false
+        default: ""
+      body_carry_band_trims:
+        description: Optional DIALOG_GCD_BODY_CARRY_BAND_TRIMS csv
+        required: false
+        default: ""
+      skip_exact:
+        description: Optional TAIL_HUNT_SKIP_EXACT override
+        required: false
+        default: ""
+  push:
+    branches:
+      - codex/row0-tail-search
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: highslice-tail-hunt-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain') }}
+      - name: Build tail hunter
+        run: cargo build --release --locked --bin tail_hunt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tail_hunt
+          path: target/release/tail_hunt
+
+  hunt:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          - 7
+          - 8
+          - 9
+          - 10
+          - 11
+          - 12
+          - 13
+          - 14
+          - 15
+          - 16
+          - 17
+          - 18
+          - 19
+          - 20
+          - 21
+          - 22
+          - 23
+    env:
+      PUSH_START: "0"
+      PUSH_PER_SHARD: "3000"
+      PUSH_SHARDS: "24"
+      PUSH_THREADS: "2"
+      PUSH_BAND_TRIMS: ""
+      PUSH_BRANCH_HIGH_SLICE: ""
+      PUSH_BODY_CARRY_TRUNC_W: ""
+      PUSH_BODY_CARRY_BAND_TRIMS: ""
+      PUSH_SKIP_EXACT: ""
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tail_hunt
+      - name: Search shard
+        shell: bash
+        run: |
+          chmod +x ./tail_hunt
+          start="${{ github.event.inputs.start || env.PUSH_START }}"
+          per_shard="${{ github.event.inputs.per_shard || env.PUSH_PER_SHARD }}"
+          shards="${{ github.event.inputs.shards || env.PUSH_SHARDS }}"
+          threads="${{ github.event.inputs.threads || env.PUSH_THREADS }}"
+          band_trims="${{ github.event.inputs.band_trims || env.PUSH_BAND_TRIMS }}"
+          branch_high_slice="${{ github.event.inputs.branch_high_slice || env.PUSH_BRANCH_HIGH_SLICE }}"
+          body_carry_trunc_w="${{ github.event.inputs.body_carry_trunc_w || env.PUSH_BODY_CARRY_TRUNC_W }}"
+          body_carry_band_trims="${{ github.event.inputs.body_carry_band_trims || env.PUSH_BODY_CARRY_BAND_TRIMS }}"
+          skip_exact="${{ github.event.inputs.skip_exact || env.PUSH_SKIP_EXACT }}"
+          if [[ -n "$band_trims" ]]; then
+            export DIALOG_GCD_WIDTH_BAND_TRIMS="$band_trims"
+            echo "band_trims=$band_trims"
+          fi
+          if [[ -n "$branch_high_slice" ]]; then
+            export DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE="$branch_high_slice"
+            echo "branch_high_slice=$branch_high_slice"
+          fi
+          if [[ -n "$body_carry_trunc_w" ]]; then
+            export DIALOG_GCD_BODY_CARRY_TRUNC_W="$body_carry_trunc_w"
+            echo "body_carry_trunc_w=$body_carry_trunc_w"
+          fi
+          if [[ -n "$body_carry_band_trims" ]]; then
+            export DIALOG_GCD_BODY_CARRY_BAND_TRIMS="$body_carry_band_trims"
+            echo "body_carry_band_trims=$body_carry_band_trims"
+          fi
+          if [[ -n "$skip_exact" ]]; then
+            export TAIL_HUNT_SKIP_EXACT="$skip_exact"
+            echo "skip_exact=$skip_exact"
+          fi
+          if (( ${{ matrix.shard }} >= shards )); then
+            echo "matrix shard ${{ matrix.shard }} outside requested shard count $shards"
+            exit 0
+          fi
+          shard_start=$((start + ${{ matrix.shard }}))
+          ./tail_hunt "$shard_start" "$per_shard" "$shards" "$threads" | tee "hunt-${{ matrix.shard }}.log"
+          if grep -q '^FOUND ' "hunt-${{ matrix.shard }}.log"; then
+            echo "::notice::$(grep '^FOUND ' "hunt-${{ matrix.shard }}.log")"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hunt-log-${{ matrix.shard }}
+          path: hunt-${{ matrix.shard }}.log
