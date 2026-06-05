@@ -19,6 +19,14 @@ on:
         description: Worker threads per shard
         required: true
         default: "2"
+      band_trims:
+        description: Optional DIALOG_GCD_WIDTH_BAND_TRIMS csv
+        required: false
+        default: ""
+      branch_high_slice:
+        description: Optional DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE override
+        required: false
+        default: ""
   push:
     branches:
       - codex/row0-tail-search
@@ -79,6 +87,8 @@ jobs:
       PUSH_PER_SHARD: "3000"
       PUSH_SHARDS: "24"
       PUSH_THREADS: "2"
+      PUSH_BAND_TRIMS: ""
+      PUSH_BRANCH_HIGH_SLICE: ""
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -91,6 +101,16 @@ jobs:
           per_shard="${{ github.event.inputs.per_shard || env.PUSH_PER_SHARD }}"
           shards="${{ github.event.inputs.shards || env.PUSH_SHARDS }}"
           threads="${{ github.event.inputs.threads || env.PUSH_THREADS }}"
+          band_trims="${{ github.event.inputs.band_trims || env.PUSH_BAND_TRIMS }}"
+          branch_high_slice="${{ github.event.inputs.branch_high_slice || env.PUSH_BRANCH_HIGH_SLICE }}"
+          if [[ -n "$band_trims" ]]; then
+            export DIALOG_GCD_WIDTH_BAND_TRIMS="$band_trims"
+            echo "band_trims=$band_trims"
+          fi
+          if [[ -n "$branch_high_slice" ]]; then
+            export DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE="$branch_high_slice"
+            echo "branch_high_slice=$branch_high_slice"
+          fi
           if (( ${{ matrix.shard }} >= shards )); then
             echo "matrix shard ${{ matrix.shard }} outside requested shard count $shards"
             exit 0

@@ -24471,13 +24471,33 @@ fn dialog_gcd_width_slope() -> f64 {
         .unwrap_or(0.5 * 1.415)
 }
 
+fn dialog_gcd_width_band_trim(step: usize) -> usize {
+    let s = match std::env::var("DIALOG_GCD_WIDTH_BAND_TRIMS") {
+        Ok(s) if !s.is_empty() => s,
+        _ => return 0,
+    };
+    let trims: Vec<usize> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+    if trims.is_empty() {
+        return 0;
+    }
+    let iters = dialog_gcd_active_iterations().max(1);
+    let band_size = ((iters + trims.len() - 1) / trims.len()).max(1);
+    let band = (step / band_size).min(trims.len() - 1);
+    trims[band]
+}
+
 fn dialog_gcd_tobitvector_active_width(step: usize) -> usize {
     if !dialog_gcd_raw_tobitvector_variable_width_enabled() {
         return N;
     }
     let ideal = N as f64 - (step as f64) * dialog_gcd_width_slope() + dialog_gcd_width_margin();
     let rounded = ((ideal.max(1.0) / 2.0).ceil() as usize) * 2;
-    rounded.clamp(1, N)
+    let lin = rounded.clamp(1, N);
+    let trim = dialog_gcd_width_band_trim(step);
+    if trim == 0 {
+        return lin;
+    }
+    ((lin.saturating_sub(trim) / 2) * 2).max(2)
 }
 
 fn dialog_gcd_round762_active_width(step: usize) -> usize {
