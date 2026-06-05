@@ -31428,9 +31428,12 @@ fn configure_ecdsafail_submission_route() {
     // 399 T/qubit, far inside break-even. Score 1446 x 1,740,263 = 2,516,420,298.
     set_default_env("DIALOG_GCD_BODY_HOST_CIN", "1");
     set_default_env("DIALOG_GCD_LATE_BORROW_UV_HIGH", "1");
-    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT", "56");
-    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT2", "112");
-    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT3", "168");
+    // K=2 apply rebalance: moving the last custom chunk boundary 168 -> 170
+    // drops the apply raw sum/difference peak 1394 -> 1390. It adds 1,036
+    // Toffoli per apply direction, but the four-qubit reduction wins on product.
+    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT", "58");
+    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT2", "114");
+    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT3", "170");
     // WIDTH_SLOPE tightening: the per-step GCD width envelope shrink rate
     // (ideal = N - step*SLOPE + MARGIN) was left at the default 0.7075 by the
     // whole frontier lineage; only the constant MARGIN was ever tuned. The
@@ -31451,7 +31454,9 @@ fn configure_ecdsafail_submission_route() {
     // build_builder) reseeds the 9024 Fiat-Shamir test inputs without changing
     // the circuit action, Toffoli count, or peak qubits. nonce=385307 lands a
     // clean island: validated 0/0/0 over all 9024 shots at 1350q x 1,763,987 T.
-    set_default_env("DIALOG_TAIL_NONCE", "124");
+    // Fiat-Shamir island for the K=2 apply rebalance above: 0/0/0 over all
+    // 9024 shots at 1390q x 1,630,487 T.
+    set_default_env("DIALOG_TAIL_NONCE", "141744616447148");
     // Fuse the branch-bit comparator with the b0-controlled log update: derive
     // b0_and_b1 from the in-flight comparator carry instead of materializing a
     // separate cmp qubit and recomputing the comparator for uncompute. Pure
