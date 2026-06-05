@@ -39,6 +39,10 @@ on:
         description: Optional DIALOG_GCD_ACTIVE_ITERATIONS override
         required: false
         default: ""
+      width_margin:
+        description: Optional DIALOG_GCD_WIDTH_MARGIN override
+        required: false
+        default: ""
       compare_bits:
         description: Optional DIALOG_GCD_COMPARE_BITS override
         required: false
@@ -124,6 +128,7 @@ jobs:
       PUSH_BODY_CARRY_TRUNC_W: ""
       PUSH_BODY_CARRY_BAND_TRIMS: ""
       PUSH_ACTIVE_ITERATIONS: ""
+      PUSH_WIDTH_MARGIN: ""
       PUSH_COMPARE_BITS: ""
       PUSH_APPLY_CLEAN_COMPARE_BITS: ""
       PUSH_KAL_DOUBLE_CARRY_TRUNC_W: ""
@@ -146,6 +151,7 @@ jobs:
           body_carry_trunc_w="${{ github.event.inputs.body_carry_trunc_w || env.PUSH_BODY_CARRY_TRUNC_W }}"
           body_carry_band_trims="${{ github.event.inputs.body_carry_band_trims || env.PUSH_BODY_CARRY_BAND_TRIMS }}"
           active_iterations="${{ github.event.inputs.active_iterations || env.PUSH_ACTIVE_ITERATIONS }}"
+          width_margin="${{ github.event.inputs.width_margin || env.PUSH_WIDTH_MARGIN }}"
           compare_bits="${{ github.event.inputs.compare_bits || env.PUSH_COMPARE_BITS }}"
           apply_clean_compare_bits="${{ github.event.inputs.apply_clean_compare_bits || env.PUSH_APPLY_CLEAN_COMPARE_BITS }}"
           kal_double_carry_trunc_w="${{ github.event.inputs.kal_double_carry_trunc_w || env.PUSH_KAL_DOUBLE_CARRY_TRUNC_W }}"
@@ -170,6 +176,10 @@ jobs:
           if [[ -n "$active_iterations" ]]; then
             export DIALOG_GCD_ACTIVE_ITERATIONS="$active_iterations"
             echo "active_iterations=$active_iterations"
+          fi
+          if [[ -n "$width_margin" ]]; then
+            export DIALOG_GCD_WIDTH_MARGIN="$width_margin"
+            echo "width_margin=$width_margin"
           fi
           if [[ -n "$compare_bits" ]]; then
             export DIALOG_GCD_COMPARE_BITS="$compare_bits"
