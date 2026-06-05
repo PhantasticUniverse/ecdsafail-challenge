@@ -24565,11 +24565,14 @@ fn dialog_gcd_round762_active_width(step: usize) -> usize {
 /// leaving the cswap and comparator at full active_width. Returns the truncated
 /// body width, clamped to >= 2.
 fn dialog_gcd_body_carry_band_trim(step: usize) -> Option<usize> {
-    let s = std::env::var("DIALOG_GCD_BODY_CARRY_BAND_TRIMS").ok()?;
-    if s.is_empty() {
+    let trims = std::env::var("DIALOG_GCD_BODY_CARRY_BAND_TRIMS").ok()?;
+    if trims.trim().is_empty() {
         return None;
     }
-    let trims: Vec<usize> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+    let trims: Vec<usize> = trims
+        .split(',')
+        .filter_map(|s| s.trim().parse::<usize>().ok())
+        .collect();
     if trims.is_empty() {
         return None;
     }
@@ -31340,7 +31343,7 @@ fn configure_ecdsafail_submission_route() {
     // PA9024_COMPARE_SCHEDULE_MARGIN 8->7: -5,576 executed Toffoli at the 1434
     // peak. Re-rolled Fiat-Shamir island lands clean (0/0/0 over 9024) at
     // DIALOG_REROLL=0 / DIALOG_POST_SUB_REROLL=44. 1434q x 1,733,573 T = 2,485,943,682.
-    set_default_env("DIALOG_GCD_WIDTH_MARGIN", "18");
+    set_default_env("DIALOG_GCD_WIDTH_MARGIN", "17");
     // Measured (Gidney) uncompute for the apply-phase modular subtract's raw
     // difference, mirroring the already-measured apply ADD. ~n Toffoli instead
     // of ~2n per call; peak-neutral (same carry lane the ADD already uses).
@@ -31428,6 +31431,10 @@ fn configure_ecdsafail_submission_route() {
     // 399 T/qubit, far inside break-even. Score 1446 x 1,740,263 = 2,516,420,298.
     set_default_env("DIALOG_GCD_BODY_HOST_CIN", "1");
     set_default_env("DIALOG_GCD_LATE_BORROW_UV_HIGH", "1");
+    set_default_env(
+        "DIALOG_GCD_BODY_CARRY_BAND_TRIMS",
+        "0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1",
+    );
     // K=2 apply rebalance: moving the last custom chunk boundary 168 -> 170
     // drops the apply raw sum/difference peak 1394 -> 1390. It adds 1,036
     // Toffoli per apply direction, but the four-qubit reduction wins on product.
@@ -31456,7 +31463,7 @@ fn configure_ecdsafail_submission_route() {
     // clean island: validated 0/0/0 over all 9024 shots at 1350q x 1,763,987 T.
     // Fiat-Shamir island for the K=2 apply rebalance above: 0/0/0 over all
     // 9024 shots at 1390q x 1,630,487 T.
-    set_default_env("DIALOG_TAIL_NONCE", "141744616447148");
+    set_default_env("DIALOG_TAIL_NONCE", "33");
     // Fuse the branch-bit comparator with the b0-controlled log update: derive
     // b0_and_b1 from the in-flight comparator carry instead of materializing a
     // separate cmp qubit and recomputing the comparator for uncompute. Pure
