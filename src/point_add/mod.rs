@@ -24316,6 +24316,13 @@ fn dialog_gcd_odd_u_lowbit_fastpath_enabled() -> bool {
         == Some("1")
 }
 
+fn dialog_gcd_branch_high_slice_compare_enabled() -> bool {
+    std::env::var("DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
 fn dialog_gcd_cmp_gt_truncated_into_width(
     b: &mut B,
     u: &[QubitId],
@@ -24356,9 +24363,14 @@ fn dialog_gcd_branch_bits_host_comparator_enabled() -> bool {
 /// `carries` transient on a borrowed clean slice (the idle future-log region)
 /// when one of sufficient length is supplied, freeing the peak qubit the fresh
 /// allocation would otherwise consume at the branch_bits instant. Falls back to
-/// the self-allocating comparator when no slice (or a too-short one) is given, so
-/// behaviour is identical to `dialog_gcd_ccx_cmp_gt_truncated_into_width` in that
-/// case. Value-exact either way.
+/// the self-allocating comparator when no slice (or a too-short one) is given.
+///
+/// With `DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE=1`, this helper also applies a
+/// branch-specific shortcut: in the fused branch-bit call sites `ctrl` is the
+/// copied low bit `b0 = v[0]`, so `b0 & (u > v)` can ignore lane 0 when the
+/// compare covers the whole active word. Keep that precondition local to the
+/// branch-bit call sites; the high-slice path is not a generic controlled
+/// comparator replacement.
 fn dialog_gcd_ccx_cmp_gt_truncated_into_width_hosted(
     b: &mut B,
     u: &[QubitId],
@@ -24372,8 +24384,18 @@ fn dialog_gcd_ccx_cmp_gt_truncated_into_width_hosted(
     assert!(!u.is_empty());
     let compare_bits = compare_bits.min(u.len()).max(1);
     let start = u.len() - compare_bits;
-    let cmp_u = &v[start..];
-    let cmp_v = &u[start..];
+    // In the fused branch lifecycle this comparator is controlled by b0=v[0].
+    // When b0=0 the target is not toggled; when b0=1, lane 0 is equal on the
+    // odd-u route, so only the high slices decide `u > v`.
+    let high_slice_branch_compare = dialog_gcd_branch_high_slice_compare_enabled()
+        && dialog_gcd_odd_u_lowbit_fastpath_enabled()
+        && start == 0
+        && compare_bits > 1;
+    let (cmp_u, cmp_v) = if high_slice_branch_compare {
+        (&v[1..], &u[1..])
+    } else {
+        (&v[start..], &u[start..])
+    };
     let n = cmp_u.len();
     // Need c_in (1) + carries (n) = n+1 clean lanes. PARTIAL hosting: borrow the
     // future-log prefix that fits and allocate only the deficit, instead of
@@ -31260,6 +31282,7 @@ fn configure_ecdsafail_submission_route() {
     // to a CX, and the lane-0 tobitvector add/sub body has no carry/borrow into
     // lane 1, so the body can start at bit 1. Co-tuned with the reroll island.
     set_default_env("DIALOG_GCD_ODD_U_LOWBIT_FASTPATH", "1");
+    set_default_env("DIALOG_GCD_BRANCH_HIGH_SLICE_COMPARE", "1");
 }
 
 fn build_builder() -> B {
