@@ -24564,31 +24564,11 @@ fn dialog_gcd_round762_active_width(step: usize) -> usize {
 /// exactly like the global WIDTH_MARGIN — but applied to the sub/add ONLY,
 /// leaving the cswap and comparator at full active_width. Returns the truncated
 /// body width, clamped to >= 2.
-fn dialog_gcd_body_carry_band_trim(step: usize) -> Option<usize> {
-    let trims = std::env::var("DIALOG_GCD_BODY_CARRY_BAND_TRIMS").ok()?;
-    if trims.trim().is_empty() {
-        return None;
-    }
-    let trims: Vec<usize> = trims
-        .split(',')
-        .filter_map(|s| s.trim().parse::<usize>().ok())
-        .collect();
-    if trims.is_empty() {
-        return None;
-    }
-    let iters = dialog_gcd_active_iterations().max(1);
-    let band_size = ((iters + trims.len() - 1) / trims.len()).max(1);
-    let band = (step / band_size).min(trims.len() - 1);
-    Some(trims[band])
-}
-
-fn dialog_gcd_body_carry_trunc_width(active_width: usize, step: usize) -> usize {
-    let w = dialog_gcd_body_carry_band_trim(step).unwrap_or_else(|| {
-        std::env::var("DIALOG_GCD_BODY_CARRY_TRUNC_W")
-            .ok()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(0)
-    });
+fn dialog_gcd_body_carry_trunc_width(active_width: usize) -> usize {
+    let w = std::env::var("DIALOG_GCD_BODY_CARRY_TRUNC_W")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(0);
     active_width.saturating_sub(w).max(2)
 }
 
@@ -24824,7 +24804,6 @@ fn dialog_gcd_controlled_sub_selected(
     acc: &[QubitId],
     ctrl: QubitId,
     borrowed_carries: Option<&[QubitId]>,
-    step: usize,
 ) {
     assert_eq!(subtrahend.len(), acc.len());
     assert!(!subtrahend.is_empty());
@@ -24851,7 +24830,7 @@ fn dialog_gcd_controlled_sub_selected(
                 gated_owned.as_slice()
             }
         };
-        let body_w = dialog_gcd_body_carry_trunc_width(n, step);
+        let body_w = dialog_gcd_body_carry_trunc_width(n);
         let odd_lowbit_fast = dialog_gcd_odd_u_lowbit_fastpath_enabled();
         let body_start = if odd_lowbit_fast { 1 } else { 0 };
         b.set_phase("dialog_gcd_raw_tobitvector_materialized_sub_load");
@@ -24911,7 +24890,6 @@ fn dialog_gcd_controlled_add_selected(
     acc: &[QubitId],
     ctrl: QubitId,
     borrowed_carries: Option<&[QubitId]>,
-    step: usize,
 ) {
     assert_eq!(addend.len(), acc.len());
     assert!(!addend.is_empty());
@@ -24936,7 +24914,7 @@ fn dialog_gcd_controlled_add_selected(
                 gated_owned.as_slice()
             }
         };
-        let body_w = dialog_gcd_body_carry_trunc_width(n, step);
+        let body_w = dialog_gcd_body_carry_trunc_width(n);
         let odd_lowbit_fast = dialog_gcd_odd_u_lowbit_fastpath_enabled();
         let body_start = if odd_lowbit_fast { 1 } else { 0 };
         b.set_phase("dialog_gcd_raw_tobitvector_materialized_add_load");
@@ -25058,7 +25036,7 @@ fn emit_dialog_gcd_raw_tobitvector_steps(
 
         b.set_phase("dialog_gcd_raw_tobitvector_subtract");
         let borrowed_carries = dialog_gcd_future_log_carry_slice(dialog_log, step, active_width);
-        dialog_gcd_controlled_sub_selected(b, u_active, v_active, b0, borrowed_carries, step);
+        dialog_gcd_controlled_sub_selected(b, u_active, v_active, b0, borrowed_carries);
 
         b.set_phase("dialog_gcd_raw_tobitvector_shift");
         dialog_gcd_shift_right_assuming_even(b, v_active);
@@ -25089,7 +25067,7 @@ fn emit_dialog_gcd_raw_tobitvector_steps_reverse(
 
         b.set_phase("dialog_gcd_raw_tobitvector_reverse_add");
         let borrowed_carries = dialog_gcd_future_log_carry_slice(dialog_log, step, active_width);
-        dialog_gcd_controlled_add_selected(b, u_active, v_active, b0, borrowed_carries, step);
+        dialog_gcd_controlled_add_selected(b, u_active, v_active, b0, borrowed_carries);
 
         b.set_phase("dialog_gcd_raw_tobitvector_reverse_cswap");
         for (i, (&ui, &vi)) in u_active.iter().zip(v_active.iter()).enumerate() {
@@ -26746,7 +26724,7 @@ fn emit_dialog_gcd_compressed_sidecar_tobitvector_steps_block_lifecycle(
             }
 
             b.set_phase("dialog_gcd_compressed_block_tobitvector_subtract");
-            dialog_gcd_controlled_sub_selected(b, u_active, v_active, b0, borrowed_carries, step);
+            dialog_gcd_controlled_sub_selected(b, u_active, v_active, b0, borrowed_carries);
 
             b.set_phase("dialog_gcd_compressed_block_tobitvector_shift");
             dialog_gcd_shift_right_assuming_even(b, v_active);
@@ -26904,7 +26882,7 @@ fn emit_dialog_gcd_compressed_sidecar_tobitvector_steps_reverse_block_lifecycle(
                 || dialog_gcd_pick_runway_safe_borrow_slice(future, u, compressed_log, active_width),
                 |scratch| Some(scratch.lanes.as_slice()),
             );
-            dialog_gcd_controlled_add_selected(b, u_active, v_active, b0, borrowed_carries, step);
+            dialog_gcd_controlled_add_selected(b, u_active, v_active, b0, borrowed_carries);
 
             b.set_phase("dialog_gcd_compressed_block_tobitvector_reverse_cswap");
             for (i, (&ui, &vi)) in u_active.iter().zip(v_active.iter()).enumerate() {
@@ -27142,7 +27120,7 @@ fn emit_dialog_gcd_compressed_sidecar_tobitvector_steps(
         b.set_phase("dialog_gcd_compressed_sidecar_tobitvector_subtract");
         let borrowed_carries =
             dialog_gcd_compressed_sidecar_future_carry_slice(compressed_log, step, active_width);
-        dialog_gcd_controlled_sub_selected(b, u_active, v_active, b0, borrowed_carries, step);
+        dialog_gcd_controlled_sub_selected(b, u_active, v_active, b0, borrowed_carries);
 
         b.set_phase("dialog_gcd_compressed_sidecar_tobitvector_shift");
         dialog_gcd_shift_right_assuming_even(b, v_active);
@@ -27197,7 +27175,7 @@ fn emit_dialog_gcd_compressed_sidecar_tobitvector_steps_reverse(
         b.set_phase("dialog_gcd_compressed_sidecar_tobitvector_reverse_add");
         let borrowed_carries =
             dialog_gcd_compressed_sidecar_future_carry_slice(compressed_log, step, active_width);
-        dialog_gcd_controlled_add_selected(b, u_active, v_active, b0, borrowed_carries, step);
+        dialog_gcd_controlled_add_selected(b, u_active, v_active, b0, borrowed_carries);
 
         b.set_phase("dialog_gcd_compressed_sidecar_tobitvector_reverse_cswap");
         for (i, (&ui, &vi)) in u_active.iter().zip(v_active.iter()).enumerate() {
@@ -31276,8 +31254,8 @@ fn configure_ecdsafail_submission_route() {
     // Margin 7 -> 6 stacked on the WIDTH_SLOPE=711 tightening: narrows the per-step
     // comparator on low/mid-width GCD steps, orthogonal to the slope envelope.
     set_default_env("DIALOG_GCD_PA9024_COMPARE_SCHEDULE_MARGIN", "6");
-    set_default_env("KAL_DOUBLE_CARRY_TRUNC_W", "24");
-    set_default_env("KAL_FOLD_CARRY_TRUNC_W", "24");
+    set_default_env("KAL_DOUBLE_CARRY_TRUNC_W", "20");
+    set_default_env("KAL_FOLD_CARRY_TRUNC_W", "20");
     set_default_env("DIALOG_GCD_ROUND763_DEDUP", "1");
     set_default_env("DIALOG_GCD_ROUND763_COMPRESS_LEVER", "1");
     set_default_env("DIALOG_GCD_MEASURED_UNDERFLOW_GATE", "1");
@@ -31343,7 +31321,7 @@ fn configure_ecdsafail_submission_route() {
     // PA9024_COMPARE_SCHEDULE_MARGIN 8->7: -5,576 executed Toffoli at the 1434
     // peak. Re-rolled Fiat-Shamir island lands clean (0/0/0 over 9024) at
     // DIALOG_REROLL=0 / DIALOG_POST_SUB_REROLL=44. 1434q x 1,733,573 T = 2,485,943,682.
-    set_default_env("DIALOG_GCD_WIDTH_MARGIN", "17");
+    set_default_env("DIALOG_GCD_WIDTH_MARGIN", "7");
     // Measured (Gidney) uncompute for the apply-phase modular subtract's raw
     // difference, mirroring the already-measured apply ADD. ~n Toffoli instead
     // of ~2n per call; peak-neutral (same carry lane the ADD already uses).
@@ -31431,15 +31409,8 @@ fn configure_ecdsafail_submission_route() {
     // 399 T/qubit, far inside break-even. Score 1446 x 1,740,263 = 2,516,420,298.
     set_default_env("DIALOG_GCD_BODY_HOST_CIN", "1");
     set_default_env("DIALOG_GCD_LATE_BORROW_UV_HIGH", "1");
-    set_default_env(
-        "DIALOG_GCD_BODY_CARRY_BAND_TRIMS",
-        "0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1",
-    );
-    // K=2 apply rebalance: moving the last custom chunk boundary 168 -> 170
-    // drops the apply raw sum/difference peak 1394 -> 1390. It adds 1,036
-    // Toffoli per apply direction, but the four-qubit reduction wins on product.
-    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT", "58");
-    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT2", "114");
+    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT", "56");
+    set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT2", "112");
     set_default_env("DIALOG_GCD_APPLY_CHUNKED_F_CUT3", "170");
     // WIDTH_SLOPE tightening: the per-step GCD width envelope shrink rate
     // (ideal = N - step*SLOPE + MARGIN) was left at the default 0.7075 by the
@@ -31461,9 +31432,7 @@ fn configure_ecdsafail_submission_route() {
     // build_builder) reseeds the 9024 Fiat-Shamir test inputs without changing
     // the circuit action, Toffoli count, or peak qubits. nonce=385307 lands a
     // clean island: validated 0/0/0 over all 9024 shots at 1350q x 1,763,987 T.
-    // Fiat-Shamir island for the K=2 apply rebalance above: 0/0/0 over all
-    // 9024 shots at 1390q x 1,630,487 T.
-    set_default_env("DIALOG_TAIL_NONCE", "33");
+    set_default_env("DIALOG_TAIL_NONCE", "277");
     // Fuse the branch-bit comparator with the b0-controlled log update: derive
     // b0_and_b1 from the in-flight comparator carry instead of materializing a
     // separate cmp qubit and recomputing the comparator for uncompute. Pure
