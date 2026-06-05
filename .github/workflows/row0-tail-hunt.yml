@@ -31,6 +31,10 @@ on:
         description: Optional DIALOG_GCD_BODY_CARRY_TRUNC_W override
         required: false
         default: ""
+      body_carry_band_trims:
+        description: Optional DIALOG_GCD_BODY_CARRY_BAND_TRIMS csv
+        required: false
+        default: ""
   push:
     branches:
       - codex/row0-tail-search
@@ -94,6 +98,7 @@ jobs:
       PUSH_BAND_TRIMS: ""
       PUSH_BRANCH_HIGH_SLICE: ""
       PUSH_BODY_CARRY_TRUNC_W: ""
+      PUSH_BODY_CARRY_BAND_TRIMS: ""
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -109,6 +114,7 @@ jobs:
           band_trims="${{ github.event.inputs.band_trims || env.PUSH_BAND_TRIMS }}"
           branch_high_slice="${{ github.event.inputs.branch_high_slice || env.PUSH_BRANCH_HIGH_SLICE }}"
           body_carry_trunc_w="${{ github.event.inputs.body_carry_trunc_w || env.PUSH_BODY_CARRY_TRUNC_W }}"
+          body_carry_band_trims="${{ github.event.inputs.body_carry_band_trims || env.PUSH_BODY_CARRY_BAND_TRIMS }}"
           if [[ -n "$band_trims" ]]; then
             export DIALOG_GCD_WIDTH_BAND_TRIMS="$band_trims"
             echo "band_trims=$band_trims"
@@ -120,6 +126,10 @@ jobs:
           if [[ -n "$body_carry_trunc_w" ]]; then
             export DIALOG_GCD_BODY_CARRY_TRUNC_W="$body_carry_trunc_w"
             echo "body_carry_trunc_w=$body_carry_trunc_w"
+          fi
+          if [[ -n "$body_carry_band_trims" ]]; then
+            export DIALOG_GCD_BODY_CARRY_BAND_TRIMS="$body_carry_band_trims"
+            echo "body_carry_band_trims=$body_carry_band_trims"
           fi
           if (( ${{ matrix.shard }} >= shards )); then
             echo "matrix shard ${{ matrix.shard }} outside requested shard count $shards"
