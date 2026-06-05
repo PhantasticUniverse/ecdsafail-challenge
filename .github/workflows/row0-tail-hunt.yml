@@ -55,6 +55,18 @@ on:
         description: Optional DIALOG_GCD_APPLY_CLEAN_COMPARE_BITS override
         required: false
         default: ""
+      apply_chunked_f_cut:
+        description: Optional DIALOG_GCD_APPLY_CHUNKED_F_CUT override
+        required: false
+        default: ""
+      apply_chunked_f_cut2:
+        description: Optional DIALOG_GCD_APPLY_CHUNKED_F_CUT2 override
+        required: false
+        default: ""
+      apply_chunked_f_cut3:
+        description: Optional DIALOG_GCD_APPLY_CHUNKED_F_CUT3 override
+        required: false
+        default: ""
       kal_double_carry_trunc_w:
         description: Optional KAL_DOUBLE_CARRY_TRUNC_W override
         required: false
@@ -136,6 +148,9 @@ jobs:
       PUSH_WIDTH_SLOPE_X1000: ""
       PUSH_COMPARE_BITS: ""
       PUSH_APPLY_CLEAN_COMPARE_BITS: ""
+      PUSH_APPLY_CHUNKED_F_CUT: ""
+      PUSH_APPLY_CHUNKED_F_CUT2: ""
+      PUSH_APPLY_CHUNKED_F_CUT3: ""
       PUSH_KAL_DOUBLE_CARRY_TRUNC_W: ""
       PUSH_KAL_FOLD_CARRY_TRUNC_W: ""
       PUSH_SKIP_EXACT: ""
@@ -160,6 +175,9 @@ jobs:
           width_slope_x1000="${{ github.event.inputs.width_slope_x1000 || env.PUSH_WIDTH_SLOPE_X1000 }}"
           compare_bits="${{ github.event.inputs.compare_bits || env.PUSH_COMPARE_BITS }}"
           apply_clean_compare_bits="${{ github.event.inputs.apply_clean_compare_bits || env.PUSH_APPLY_CLEAN_COMPARE_BITS }}"
+          apply_chunked_f_cut="${{ github.event.inputs.apply_chunked_f_cut || env.PUSH_APPLY_CHUNKED_F_CUT }}"
+          apply_chunked_f_cut2="${{ github.event.inputs.apply_chunked_f_cut2 || env.PUSH_APPLY_CHUNKED_F_CUT2 }}"
+          apply_chunked_f_cut3="${{ github.event.inputs.apply_chunked_f_cut3 || env.PUSH_APPLY_CHUNKED_F_CUT3 }}"
           kal_double_carry_trunc_w="${{ github.event.inputs.kal_double_carry_trunc_w || env.PUSH_KAL_DOUBLE_CARRY_TRUNC_W }}"
           kal_fold_carry_trunc_w="${{ github.event.inputs.kal_fold_carry_trunc_w || env.PUSH_KAL_FOLD_CARRY_TRUNC_W }}"
           skip_exact="${{ github.event.inputs.skip_exact || env.PUSH_SKIP_EXACT }}"
@@ -198,6 +216,18 @@ jobs:
           if [[ -n "$apply_clean_compare_bits" ]]; then
             export DIALOG_GCD_APPLY_CLEAN_COMPARE_BITS="$apply_clean_compare_bits"
             echo "apply_clean_compare_bits=$apply_clean_compare_bits"
+          fi
+          if [[ -n "$apply_chunked_f_cut" ]]; then
+            export DIALOG_GCD_APPLY_CHUNKED_F_CUT="$apply_chunked_f_cut"
+            echo "apply_chunked_f_cut=$apply_chunked_f_cut"
+          fi
+          if [[ -n "$apply_chunked_f_cut2" ]]; then
+            export DIALOG_GCD_APPLY_CHUNKED_F_CUT2="$apply_chunked_f_cut2"
+            echo "apply_chunked_f_cut2=$apply_chunked_f_cut2"
+          fi
+          if [[ -n "$apply_chunked_f_cut3" ]]; then
+            export DIALOG_GCD_APPLY_CHUNKED_F_CUT3="$apply_chunked_f_cut3"
+            echo "apply_chunked_f_cut3=$apply_chunked_f_cut3"
           fi
           if [[ -n "$kal_double_carry_trunc_w" ]]; then
             export KAL_DOUBLE_CARRY_TRUNC_W="$kal_double_carry_trunc_w"
