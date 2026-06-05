@@ -294,6 +294,30 @@ fn active_width(step: usize) -> usize {
     }
 }
 
+fn body_carry_band_trim(step: usize) -> Option<usize> {
+    let s = std::env::var("DIALOG_GCD_BODY_CARRY_BAND_TRIMS").ok()?;
+    if s.is_empty() {
+        return None;
+    }
+    let trims: Vec<usize> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+    if trims.is_empty() {
+        return None;
+    }
+    let band_size = ((393 + trims.len() - 1) / trims.len()).max(1);
+    let band = (step / band_size).min(trims.len() - 1);
+    Some(trims[band])
+}
+
+fn body_carry_trunc_width(width: usize, step: usize) -> usize {
+    let w = body_carry_band_trim(step).unwrap_or_else(|| {
+        std::env::var("DIALOG_GCD_BODY_CARRY_TRUNC_W")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(0)
+    });
+    width.saturating_sub(w).max(2)
+}
+
 fn compare_bits_for_step(step: usize, width: usize) -> usize {
     let global = std::env::var("DIALOG_GCD_COMPARE_BITS")
         .ok()
@@ -316,6 +340,26 @@ fn compare_bits_for_step(step: usize, width: usize) -> usize {
 
 fn high_nonzero(x: U256, width: usize) -> bool {
     width < 256 && !(x >> width).is_zero()
+}
+
+fn low_mask(width: usize) -> U256 {
+    if width >= 256 {
+        U256::MAX
+    } else {
+        (U256::from(1u64) << width) - U256::from(1u64)
+    }
+}
+
+fn body_truncated_sub_ok(u: U256, v: U256, width: usize, step: usize) -> bool {
+    let body_w = body_carry_trunc_width(width, step);
+    if body_w >= width {
+        return true;
+    }
+    if high_nonzero(u, body_w) {
+        return false;
+    }
+    let mask = low_mask(body_w);
+    (v & mask) >= (u & mask)
 }
 
 fn apply_clean_compare_bits() -> usize {
@@ -388,6 +432,9 @@ fn gcd_predict(mut u: U256, mut v: U256) -> Option<GcdPrediction> {
             std::mem::swap(&mut u, &mut v);
         }
         if b0 {
+            if !body_truncated_sub_ok(u, v, width, step) {
+                return None;
+            }
             if v < u {
                 return None;
             }
